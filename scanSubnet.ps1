@@ -45,7 +45,7 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
   $scanrange = (1..255)
   foreach ($ipaddr in $scanrange){
     $scanIp = $classCIpAddr + $ipaddr
-    $endofrange = 255 - $ipaddr # first is 254, $ipaddr first is 1
+    $endofrange = 256 - $ipaddr # first is 254, $ipaddr first is 1
 
     $pingStatus = if($ipaddr % 2){ fastping $scanIp; $ip = $scanIp } else { fastping $endofrange; $ip = $endofrange }
 
