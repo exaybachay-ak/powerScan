@@ -1,12 +1,21 @@
-### Subnet port scanner 
-#  Arg[0] is PORT array
+param(
+  [Parameter(Mandatory=$False)]$ports,
+  [Parameter(Mandatory=$False)][Boolean]$sequential
+)
+
+if(!($ports)){
+    $ports = @(22,23,80,135,443,8080)
+}
+
+if(!($sequential)){
+    $sequential = $False
+}
 
 function fastping{
   [CmdletBinding()]
   param(
   [String]$computername,
-  [int]$delay = 10,
-  [String]$sequential
+  [int]$delay = 10
   )
 
   $ping = new-object System.Net.NetworkInformation.Ping  # see http://msdn.microsoft.com/en-us/library/system.net.networkinformation.ipstatus%28v=vs.110%29.aspx
@@ -29,7 +38,8 @@ function testPort ($comp, $port) {
   $tcpClient = New-Object System.Net.Sockets.TCPClient
   #$tcpClient.Connect($comp,$port) | out-null
   $beginConnect = $tcpClient.BeginConnect($comp,$port,$requestCallback,$state)
-  Start-sleep -milli 100
+  #Start-sleep -milli 100
+  Start-sleep -milli 10
   if($tcpClient.Connected) { $open = $True } else { $open = $False }
   $tcpClient.Close()
   #return $tcpClient.Connected   
@@ -56,36 +66,29 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
     $scanIp = $classCIpAddr + $ipaddr
     $endofrange = 256 - $ipaddr # first is 254, $ipaddr first is 1
 
-    if($sequential){
+    if($sequential -eq $True){
       $pingStatus = fastping $scanIp 
+      $ip = $scanIp
     } else {
-      $pingStatus = if($ipaddr % 2){ fastping $scanIp; $ip = $scanIp } else { fastping $endofrange; $ip = $endofrange }
+      if($ipaddr % 2 -eq 0){ 
+        $ip = $scanIp 
+        $pingStatus = fastping $ip
+      } else { 
+        $ip = "$classCIpAddr$endofrange" 
+        $pingStatus = fastping $ip
+      }
     }
-
-    if ($pingStatus -eq "True"){
+    if ($pingStatus -eq $True){
       #$hn = Resolve-DnsName $scanIp
       #$hn = $hn.namehost
-      if($args){
-        foreach($port in $args[0]){
-          # Start at end of 255 range and bounce around
-          $test = testPort $ip $port
-          if($test.open -eq $True){ 
+    foreach($port in $ports){
+        $test = testPort $ip $port
+        if($test.open){
             write-output "$ip is listening on $port!"
-          }
-          else { 
-            #pass 
-          }
+        } else {
+            #pass
         }
-      } else {
-          foreach($port in @(22,23,80,135,443,8080)){
-            $test = testport $ip $port
-            if($test.open -eq $True){
-              write-output "$ip is listening on $port!"
-            } else {
-              #pass
-            }
-          }
-        }
+    }
       }
     }
   }
