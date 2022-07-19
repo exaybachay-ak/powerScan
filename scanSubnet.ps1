@@ -5,7 +5,8 @@ function fastping{
   [CmdletBinding()]
   param(
   [String]$computername,
-  [int]$delay = 10
+  [int]$delay = 10,
+  [String]$sequential
   )
 
   $ping = new-object System.Net.NetworkInformation.Ping  # see http://msdn.microsoft.com/en-us/library/system.net.networkinformation.ipstatus%28v=vs.110%29.aspx
@@ -22,9 +23,17 @@ function fastping{
 }
 
 function testPort ($comp, $port) {
+  # Improving speed of timeouts
+  #   https://superuser.com/questions/805621/test-network-ports-faster-with-powershell
+  $requestCallback = $state = $null
   $tcpClient = New-Object System.Net.Sockets.TCPClient
-  $tcpClient.Connect($comp,$port) | out-null
-  return $tcpClient.Connected   
+  #$tcpClient.Connect($comp,$port) | out-null
+  $beginConnect = $tcpClient.BeginConnect($comp,$port,$requestCallback,$state)
+  Start-sleep -milli 100
+  if($tcpClient.Connected) { $open = $True } else { $open = $False }
+  $tcpClient.Close()
+  #return $tcpClient.Connected   
+  [pscustomobject]@{computername=$comp;port=$port;open=$open}
 }
 
 $ipinfo = get-wmiobject win32_networkadapterconfiguration | ? {$_.ipenabled}
@@ -47,7 +56,11 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
     $scanIp = $classCIpAddr + $ipaddr
     $endofrange = 256 - $ipaddr # first is 254, $ipaddr first is 1
 
-    $pingStatus = if($ipaddr % 2){ fastping $scanIp; $ip = $scanIp } else { fastping $endofrange; $ip = $endofrange }
+    if($sequential){
+      $pingStatus = fastping $scanIp 
+    } else {
+      $pingStatus = if($ipaddr % 2){ fastping $scanIp; $ip = $scanIp } else { fastping $endofrange; $ip = $endofrange }
+    }
 
     if ($pingStatus -eq "True"){
       #$hn = Resolve-DnsName $scanIp
@@ -56,7 +69,7 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
         foreach($port in $args[0]){
           # Start at end of 255 range and bounce around
           $test = testPort $ip $port
-          if($test){ 
+          if($test.open -eq $True){ 
             write-output "$ip is listening on $port!"
           }
           else { 
@@ -66,7 +79,7 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
       } else {
           foreach($port in @(22,23,80,135,443,8080)){
             $test = testport $ip $port
-            if($test){
+            if($test.open -eq $True){
               write-output "$ip is listening on $port!"
             } else {
               #pass
