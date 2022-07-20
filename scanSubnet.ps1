@@ -1,11 +1,14 @@
 param(
   [Parameter(Mandatory=$False)]$ports,
   [Parameter(Mandatory=$False)][Boolean]$sequential,
+  [Parameter(Mandatory=$False)][Boolean]$random,
   [Parameter(Mandatory=$False)][Boolean]$resolveDns
 )
 
 # Set parameters if not provided
 if(!($ports)){ $ports = @(22,23,80,135,443,8080) }
+#if(!($sequential)){ $sequential = $False }
+#if(!($resolveDns)){ $resolveDns = $False }
 
 function fastping{
   [CmdletBinding()]
@@ -32,10 +35,13 @@ function testPort ($comp, $port) {
   #   https://superuser.com/questions/805621/test-network-ports-faster-with-powershell
   $requestCallback = $state = $null
   $tcpClient = New-Object System.Net.Sockets.TCPClient
+  #$tcpClient.Connect($comp,$port) | out-null
   $beginConnect = $tcpClient.BeginConnect($comp,$port,$requestCallback,$state)
+  #Start-sleep -milli 100
   Start-sleep -milli 10
   if($tcpClient.Connected) { $open = $True } else { $open = $False }
   $tcpClient.Close()
+  #return $tcpClient.Connected   
   [pscustomobject]@{computername=$comp;port=$port;open=$open}
 }
 
@@ -54,13 +60,21 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
   write-output "========================================="
   write-output " "
 
-  $scanrange = (1..255)
+  $scanrange = @(1..255)
   foreach ($ipaddr in $scanrange){
     $scanIp = $classCIpAddr + $ipaddr
     $endofrange = 256 - $ipaddr # first is 254, $ipaddr first is 1
 
     if($sequential){
       $pingStatus = fastping $scanIp 
+    } elseif($random) {
+      $randomIp = Get-Random -min 1 -max 255
+      while($($scanrange -notmatch $randomIp) -eq $True) { 
+        $randomIp = Get-Random -min 1 -max 255 
+      }
+      $scanIp = $classCIpAddr + $randomIp
+      $scanrange = $scanrange | Where-Object { $_ -ne $randomIp }
+      $pingStatus = fastping $scanIp
     } else {
       if($ipaddr % 2 -eq 0){ 
         $pingStatus = fastping $scanIp
