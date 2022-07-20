@@ -1,15 +1,11 @@
 param(
   [Parameter(Mandatory=$False)]$ports,
-  [Parameter(Mandatory=$False)][Boolean]$sequential
+  [Parameter(Mandatory=$False)][Boolean]$sequential,
+  [Parameter(Mandatory=$False)][Boolean]$resolveDns
 )
 
-if(!($ports)){
-    $ports = @(22,23,80,135,443,8080)
-}
-
-if(!($sequential)){
-    $sequential = $False
-}
+# Set parameters if not provided
+if(!($ports)){ $ports = @(22,23,80,135,443,8080) }
 
 function fastping{
   [CmdletBinding()]
@@ -36,13 +32,10 @@ function testPort ($comp, $port) {
   #   https://superuser.com/questions/805621/test-network-ports-faster-with-powershell
   $requestCallback = $state = $null
   $tcpClient = New-Object System.Net.Sockets.TCPClient
-  #$tcpClient.Connect($comp,$port) | out-null
   $beginConnect = $tcpClient.BeginConnect($comp,$port,$requestCallback,$state)
-  #Start-sleep -milli 100
   Start-sleep -milli 10
   if($tcpClient.Connected) { $open = $True } else { $open = $False }
   $tcpClient.Close()
-  #return $tcpClient.Connected   
   [pscustomobject]@{computername=$comp;port=$port;open=$open}
 }
 
@@ -66,29 +59,30 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
     $scanIp = $classCIpAddr + $ipaddr
     $endofrange = 256 - $ipaddr # first is 254, $ipaddr first is 1
 
-    if($sequential -eq $True){
+    if($sequential){
       $pingStatus = fastping $scanIp 
-      $ip = $scanIp
     } else {
       if($ipaddr % 2 -eq 0){ 
-        $ip = $scanIp 
-        $pingStatus = fastping $ip
+        $pingStatus = fastping $scanIp
       } else { 
-        $ip = "$classCIpAddr$endofrange" 
-        $pingStatus = fastping $ip
+        $scanIp = "$classCIpAddr$endofrange" 
+        $pingStatus = fastping $scanIp
       }
     }
     if ($pingStatus -eq $True){
-      #$hn = Resolve-DnsName $scanIp
-      #$hn = $hn.namehost
-    foreach($port in $ports){
-        $test = testPort $ip $port
+      write-output "Scanning $scanIp..."
+      if($resolveDns){
+        $hn = Resolve-DnsName $scanIp
+        $hn = $hn.namehost        
+      }
+      foreach($port in $ports){
+        $test = testPort $scanIp $port
         if($test.open){
-            write-output "$ip is listening on $port!"
+          write-output "$scanIp is listening on $port!"
         } else {
-            #pass
+          #pass
         }
-    }
       }
     }
   }
+}
