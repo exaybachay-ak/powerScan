@@ -7,7 +7,7 @@ param(
 )
 
 # Configure logging
-$logname = "$((pwd).path)\powerScan_$(get-date -format "yyyyMMMd")_$(get-date -format "hhmm").log"
+$logname = "$((pwd).path)\powerScan_$(get-date -format "yyyyMMMd")_$(get-date -format "hhmmss").log"
 
 # Set parameters if not provided
 if(!($ports)){ 
