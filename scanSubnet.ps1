@@ -104,6 +104,7 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
       $notlistening = 0
       if ($allports) {
         (1..65535) | %{
+          write-progress -Activity "Scanning ports on $scanIp" -PercentComplete (($_ / 65535) * 100)
           if($slow){
             $test = testPort $scanIp $_ 50
           } else {
