@@ -3,19 +3,16 @@ param(
   [Parameter(Mandatory=$False)][Boolean]$sequential,
   [Parameter(Mandatory=$False)][Boolean]$random,
   [Parameter(Mandatory=$False)][Boolean]$resolveDns,
-  [Parameter(Mandatory=$False)][Boolean]$quick
+  [Parameter(Mandatory=$False)][Boolean]$slow
 )
 
 # Configure logging
-$logname = "$((pwd).path)\powerScan_$(get-date -format "yyyyMMMd")_$(get-date -format "hhmmss").log"
+$logname = "$((pwd).path)\powerScan_$(get-date -format "yyyyMMMd")_$(get-date -format "hhmmsss").log"
 
 # Set parameters if not provided
-if(!($ports)){ 
-  $ports = @(22,23,80,135,443,8080) 
-  write-output "--->>>   Ports not specified, defaulting to scan ports 22, 23, 80, 135, 443, and 8080---" | tee-object -filepath $logname -append
-}
-if(!($quick)){ write-output "--->>>   Quick parameter not set, defaulting to slower scan" | tee-object -filepath $logname -append} 
-if(!($sequential)){ write-output "--->>>   Sequential parameter not set, defaulting to pseudo random scan" | tee-object -filepath $logname -append }
+if(!($ports)){ $ports = @(22,23,80,135,443,8080) }
+if(!($slow)){ write-output "--->>>   Slow parameter not set, defaulting to faster scan" | tee-object -filepath $logname -append} 
+if(!($sequential) -and !($random)){ write-output "--->>>   Sequential and random parameterers not set, defaulting to pseudo random scan" | tee-object -filepath $logname -append }
 write-output " " | tee-object -filepath $logname -append
 
 function fastping{
@@ -62,13 +59,16 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
 
   $usermessage = $classCIpAddr + "0/24"
   write-output "Scanning entire $usermessage subnet..." | tee-object -filepath $logname -append
+  write-output "Ports selected are: $ports" | tee-object -filepath $logname -append
   write-output "=========================================" | tee-object -filepath $logname -append
   write-output " " | tee-object -filepath $logname -append
 
   $scanrange = @(1..255)
+  $scanprogress = 0
   foreach ($ipaddr in $scanrange){
     $scanIp = $classCIpAddr + $ipaddr
     $endofrange = 256 - $ipaddr # first is 254, $ipaddr first is 1
+    write-progress -Activity "Scanning for active hosts" -PercentComplete (($ipaddr / 255) * 100)
 
     if($sequential){
       $pingStatus = fastping $scanIp 
@@ -96,17 +96,17 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
       }
       $notlistening = 0
       foreach($port in $ports){
-        if($quick){
-          $test = testPort $scanIp $port 10
+        if($slow){
+          $test = testPort $scanIp $port 50
         } else {
-          $test = testPort $scanIp $port 30
+          $test = testPort $scanIp $port 10
         }
         if($test.open){
           write-output "$scanIp is listening on $port!" | tee-object -filepath $logname -append
         } else {
           $notlistening += 1
           if($notlistening -eq $ports.count ){
-            write-output "$scanIp is not listening on any ports" | tee-object -filepath $logname -append
+            write-output "$scanIp is not listening on any of the selected ports" | tee-object -filepath $logname -append
           }
         }
       }
