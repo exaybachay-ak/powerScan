@@ -58,7 +58,7 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
   $scanrange = @(1..255)
   foreach ($ipaddr in $scanrange){
     $scanIp = $classCIpAddr + $ipaddr
-    $endofrange = 256 - $ipaddr # first is 255, $ipaddr first is 1
+    $endofrange = 256 - $ipaddr # first is 254, $ipaddr first is 1
 
     if($sequential){
       $pingStatus = fastping $scanIp 
@@ -84,12 +84,16 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
         $hn = Resolve-DnsName $scanIp
         $hn = $hn.namehost        
       }
+      $notlistening = 0
       foreach($port in $ports){
         $test = testPort $scanIp $port
         if($test.open){
           write-output "$scanIp is listening on $port!"
         } else {
-          #pass
+          $notlistening += 1
+          if($notlistening -eq $ports.count ){
+            write-output "$scanIp is not listening on any ports"
+          }
         }
       }
     }
