@@ -3,7 +3,8 @@ param(
   [Parameter(Mandatory=$False)][Boolean]$sequential,
   [Parameter(Mandatory=$False)][Boolean]$random,
   [Parameter(Mandatory=$False)][Boolean]$resolveDns,
-  [Parameter(Mandatory=$False)][Boolean]$slow
+  [Parameter(Mandatory=$False)][Boolean]$slow,
+  [Parameter(Mandatory=$False)][Boolean]$allports
 )
 
 # Configure logging
@@ -64,6 +65,7 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
   write-output " " | tee-object -filepath $logname -append
 
   $scanrange = @(1..255)
+  $randomrange = @(1..255)
   $scanprogress = 0
   foreach ($ipaddr in $scanrange){
     $scanIp = $classCIpAddr + $ipaddr
@@ -74,11 +76,16 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
       $pingStatus = fastping $scanIp 
     } elseif($random) {
       $randomIp = Get-Random -min 1 -max 255
-      while($($scanrange -notmatch $randomIp) -eq $True) { 
+      write-output "Testing IP $randomIp" 
+      #while($($scanrange.Contains($randomIp)) -eq $False) {
+
+      while($randomIp -notin $randomrange){
         $randomIp = Get-Random -min 1 -max 255 
+        if($randomrange.Count -eq 1){ $randomIp = $randomrange[0] }
+        write-output "New random IP is $randomIp"
       }
       $scanIp = $classCIpAddr + $randomIp
-      $scanrange = $scanrange | Where-Object { $_ -ne $randomIp }
+      $randomrange = $randomrange | Where-Object { $_ -ne $randomIp }
       $pingStatus = fastping $scanIp
     } else {
       if($ipaddr % 2 -eq 0){ 
@@ -95,18 +102,36 @@ if ($activeIP.ipsubnet -eq "255.255.255.0"){
         $hn = $hn.namehost | tee-object -filepath $logname -append
       }
       $notlistening = 0
-      foreach($port in $ports){
-        if($slow){
-          $test = testPort $scanIp $port 50
-        } else {
-          $test = testPort $scanIp $port 10
+      if ($allports) {
+        (1..65535) | %{
+          if($slow){
+            $test = testPort $scanIp $_ 50
+          } else {
+            $test = testPort $scanIp $_ 10
+          }
+          if($test.open){
+            write-output "$scanIp is listening on port $_!" | tee-object -filepath $logname -append
+          } else {
+            $notlistening += 1
+            if($notlistening -eq 65535){
+              write-output "$scanIp is not listening on any ports" | tee-object -filepath $logname -append
+            }
+          }
         }
-        if($test.open){
-          write-output "$scanIp is listening on $port!" | tee-object -filepath $logname -append
-        } else {
-          $notlistening += 1
-          if($notlistening -eq $ports.count ){
-            write-output "$scanIp is not listening on any of the selected ports" | tee-object -filepath $logname -append
+      } else {
+        foreach($port in $ports){
+          if($slow){
+            $test = testPort $scanIp $port 50
+          } else {
+            $test = testPort $scanIp $port 10
+          }
+          if($test.open){
+            write-output "$scanIp is listening on $port!" | tee-object -filepath $logname -append
+          } else {
+            $notlistening += 1
+            if($notlistening -eq $ports.count ){
+              write-output "$scanIp is not listening on any of the selected ports" | tee-object -filepath $logname -append
+            }
           }
         }
       }
